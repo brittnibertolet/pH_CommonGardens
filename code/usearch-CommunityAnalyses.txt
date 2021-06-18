@@ -1,0 +1,94 @@
+##### USEARCH 
+
+### Job
+
+#!/bin/bash
+
+#$ -M bbertole@nd.edu   # Email address for job notification
+#$ -m abe            # Send mail when job begins, ends and aborts
+#$ -pe mpi-24 24     # Specify parallel environment and legal core size
+#$ -q debug         # Specify queue
+#$ -N mergereads      # Specify job name
+
+# Set $usearch environmental variable
+export usearch=/afs/crc.nd.edu/user/b/bbertole/Private/2021-16S/pH20/fastqs/usearch11.0.667_i86linux32
+
+# 1. Merge paired reads
+# Add sample name to read label (-relabel option)
+
+for Sample in `cat samplelist.txt`
+do
+	$usearch -fastq_mergepairs data/${Sample}_R1_001.fastq \
+	  -fastqout $Sample.merged.fq -relabel $Sample.
+	cat $Sample.merged.fq >> all.merged.fq
+done
+
+# 2. Strip primers (V4F is 19, V4R is 20)
+$usearch -fastx_truncate all.merged.fq -stripleft 19 -stripright 20 \
+  -fastqout stripped.fq
+
+# 3. Quality filter
+$usearch -fastq_filter stripped.fq -fastq_maxee 1.0 \
+  -fastaout filtered.fa -relabel Filt
+
+# 4. Find unique read sequences and abundances
+$usearch -fastx_uniques filtered.fa -sizeout -relabel Uniq -fastaout uniques.fa
+
+# 5. Denoise: predict biological sequences and filter chimeras
+$usearch -unoise3 uniques.fa -zotus zotus.fa
+
+# 6. Make ZOTU table 
+$usearch -otutab all.merged.fq -zotus zotus.fa -otutabout zotutab_raw.txt -mapout zmap.txt
+
+# 7. Predict taxonomy
+
+$usearch -sintax zotus.fa -db data/rdp_16s_v16.fa -strand both \
+  -tabbedout zotus_sintax.txt -sintax_cutoff 0.8
+##################################################
+# Downstream analysis of OTU sequences & OTU table
+# Can do this for both OTUs and ZOTUs, here do
+# just OTUs to keep it simple.
+##################################################
+
+# Make OTU table
+$usearch -otutab all.merged.fq -otus otus.fa -otutabout otutab_raw.txt -mapout map.txt
+$usearch -otutab all.merged.fq -zotus zotus.fa -otutabout zotutab_raw.txt -mapout zmap.txt
+
+# Predict taxonomy
+$usearch -sintax otus.fa -db data/rdp_16s_v16.fa -strand both \
+  -tabbedout sintax.txt -sintax_cutoff 0.8
+  
+$usearch -sintax zotus.fa -db data/rdp_16s_v16.fa -strand both \
+  -tabbedout zotus_sintax.txt -sintax_cutoff 0.8
+  
+# Taxonomy summary reports
+$usearch -sintax_summary sintax.txt -otutabin otutab.txt -rank g -output genus_summary.txt
+$usearch -sintax_summary sintax.txt -otutabin otutab.txt -rank p -output phylum_summary.txt
+
+
+
+
+# filter fastas to make phylogeny 
+$usearch -fastx_getseqs zotus.fa -labels indicator.B.inoc.csv  -fastaout subset.indicator.B.inoc.fa
+$usearch -fastx_getseqs zotus.fa -labels indicator.B.pH.csv  -fastaout subset.indicator.B.pH.fa
+$usearch -fastx_getseqs zotus.fa -labels indicator.M.inoc.csv  -fastaout subset.indicator.M.inoc.fa
+$usearch -fastx_getseqs zotus.fa -labels indicator.M.pH.csv  -fastaout subset.indicator.M.pH.fa
+
+./muscle -in subset.indicator.B.inoc.fa -out aligned.subset.indicator.B.inoc.fa #done
+./muscle -in subset.indicator.B.pH.fa -out aligned.subset.indicator.B.pH.fa # done
+./muscle -in subset.indicator.M.inoc.fa -out aligned.subset.indicator.M.inoc.fa #done
+./muscle -in subset.indicator.M.pH.fa -out aligned.subset.indicator.M.pH.fa #done
+
+./FastTree -gtr -nt aligned.subset.indicator.B.inoc.fa > indicator.B.inoc.tree #done
+./FastTree -gtr -nt aligned.subset.indicator.B.pH.fa > indicator.B.pH.tree #done
+./FastTree -gtr -nt aligned.subset.indicator.M.inoc.fa > indicator.M.inoc.tree #done
+./FastTree -gtr -nt aligned.subset.indicator.M.pH.fa > indicator.M.pH.tree
+
+
+
+
+
+
+
+
+
