@@ -367,13 +367,18 @@ motuE.p
 pcoaM$eig[1]/sum(pcoaM$eig)
 pcoaM$eig[2]/sum(pcoaM$eig)
 
-fit=adonis(distM~dfE$treatment*dfE$lakeType)
-#Treatment effect size = 0.15
-F_to_eta2(f=fit$aov.tab$F.Model[1], df=1, df_error = 50)
-#Lake type effect size = 0.43
-F_to_eta2(f=fit$aov.tab$F.Model[2], df=2,df_error = 50)
-#Interaction effect size = 0.16
-F_to_eta2(f=fit$aov.tab$F.Model[3], df=2,df_error = 50)
+# look at significance of treatments on methanogen community 
+adonis(distM~treatment*lakeType,data=df) #sequential
+
+fit1=adonis(distM~treatment,data=df)
+fit2=adonis(distM~lakeType,data=df)
+fit3=adonis2(distM~treatment*lakeType,data=df, by="margin")
+#Treatment effect size = 0.19
+F_to_eta2(f=fit1$aov.tab$F.Model[1], df=1, df_error = 50)
+#Lake type effect size = 0.28
+F_to_eta2(f=fit2$aov.tab$F.Model[1], df=2,df_error = 50)
+#Interaction effect size = 0.11
+F_to_eta2(f=fit3$F[1], df=2,df_error = 50)
 
 
 #plot non-MCC principle coordinates
@@ -399,13 +404,19 @@ otuE.p
 pcoa$eig[1]/sum(pcoa$eig)
 pcoa$eig[2]/sum(pcoa$eig)
 
-fit=adonis(dist~dfE$treatment*dfE$lakeType)
-#Treatment effect size = 0.13
-F_to_eta2(f=fit$aov.tab$F.Model[1], df=1, df_error = 50)
-#Lake type effect size = 0.28
-F_to_eta2(f=fit$aov.tab$F.Model[2], df=2,df_error = 50)
-#Interaction effect size = 0.17
-F_to_eta2(f=fit$aov.tab$F.Model[3], df=2,df_error = 50)
+# look at significance of treatments on non-methanogen community 
+fit=adonis(dist~df$treatment*df$lakeType)
+
+fit1=adonis(dist~treatment,data=df)
+fit2=adonis(dist~lakeType,data=df)
+fit3=adonis2(dist~treatment*lakeType,data=df, by="margin")
+
+#Treatment effect size = 0.17
+F_to_eta2(f=fit1$aov.tab$F.Model[1], df=1, df_error = 50)
+#Lake type effect size = 0.19
+F_to_eta2(f=fit2$aov.tab$F.Model[1], df=2,df_error = 50)
+#Interaction effect size = 0.13
+F_to_eta2(f=fit3$F[1], df=2,df_error = 50)
 
 
 ggsave("figures/exp-community.pdf", height=2.5, width=3.5)
