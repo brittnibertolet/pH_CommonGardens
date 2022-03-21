@@ -62,8 +62,8 @@ $usearch -sintax zotus.fa -db data/rdp_16s_v16.fa -strand both \
   -tabbedout zotus_sintax.txt -sintax_cutoff 0.8
   
 # Taxonomy summary reports
-$usearch -sintax_summary sintax.txt -otutabin otutab.txt -rank g -output genus_summary.txt
-$usearch -sintax_summary sintax.txt -otutabin otutab.txt -rank p -output phylum_summary.txt
+$usearch -sintax_summary sintax_G.txt -otutabin otutab.txt -rank g -output genus_summary.txt
+$usearch -sintax_summary sintax_P.txt -otutabin otutab.txt -rank p -output phylum_summary.txt
 
 
 
@@ -88,7 +88,11 @@ $usearch -fastx_getseqs zotus.fa -labels indicator.M.pH.csv  -fastaout subset.in
 
 
 
+####### Running on UCI HPC3
+# Set $usearch environmental variable
+export usearch=/data/homezvol1/bbertole/pH/usearch11.0.667_i86linux32
 
-
-
+# Predict taxonomy
+usearch -sintax zotus_repSequences.fa -db SILVA_138.1_SSURef_NR99_12_06_20_opt.arb.gz -strand both \
+  -tabbedout zotus_sintax.txt -sintax_cutoff 0.8
 

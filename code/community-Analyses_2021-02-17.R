@@ -2,8 +2,10 @@ rm(list=ls())
 
 # Read in data and cleaning ####
 library(vegan)
+library(ggplot2)
+library(cowplot)
 library(effectsize)
-source("~/OneDrive - nd.edu/R-functions/setTheme_BB.R")
+source("~/OneDrive - UC Irvine/R-functions/setTheme_BB.R")
 
 # Read in OTU data
 otu=read.table("16S/otutab_raw.txt", sep="\t", header=T)
@@ -12,6 +14,7 @@ rownames(otu)=otu$OTU.ID
 meta=read.csv("16S/metadata.csv", stringsAsFactors = F)
 # Read in taxonomy
 tax=read.table("16S/zotus_sintax.txt", sep="\t")
+tax=read.table("pH_CommonGardens/data/zotus_sintax_ltp.txt", sep="\t")
 
 # Get rid of otus in blanks 
 #get OTUs in extraction blanks 
@@ -99,8 +102,51 @@ motuI.p
 pcoaM$eig[1]/sum(pcoaM$eig)
 pcoaM$eig[2]/sum(pcoaM$eig)
 
-## Look at centroid of initial vs incubated:
-#non-MCC
+## Look at extent of difference between incubated and lake communities
+#MCC
+lakes=unique(df$lakeID)
+rownames(df)=paste(df$lakeID,df$treatment, df$replicate, sep="_")
+out=data.frame()
+for(i in 1:length(lakes)){
+  distanceMCC=as.matrix(dist(df[df$lakeID==lakes[i],9:10], method = "euclidean", diag = FALSE))
+  distanceNon.MCC=as.matrix(dist(df[df$lakeID==lakes[i],11:12], method = "euclidean", diag = FALSE))
+  
+  # Set up output
+  outTemp=data.frame(sampleID=rownames(distanceMCC))
+  outTemp=outTemp %>% separate(col="sampleID", into=c("lakeID", "treatment", "replicate"), sep="_")
+  outTemp$distToInitialMCC=distanceMCC[grepl("initial source", rownames(distanceMCC))]
+  outTemp$distToInitialNon.MCC=distanceNon.MCC[grepl("initial source", rownames(distanceNon.MCC))]
+ 
+  #rbind
+  out=rbind(out, outTemp)
+}
+
+out=melt(out, by=c("lakeID", "treatment", "replicate"),
+         variable.name = "community", value.name = "distance")
+# Reformat
+out$community=as.character(out$community)
+out$community[out$community=="distToInitialMCC"]="MCC"
+out$community[out$community=="distToInitialNon.MCC"]="non-MCC"
+# Reformat
+out$treatment=as.character(out$treatment)
+out$treatment[out$treatment=="acidic incubation"]="acidic"
+out$treatment[out$treatment=="near-neutral incubation"]="near-neutral"
+
+ggplot(out[out$treatment!="initial source",], aes(x=inoculumType, y=distance))+
+  geom_boxplot(aes(fill=treatment))+
+  facet_grid(community~., scales = "free")+
+  scale_fill_discrete(name="pH environment")+
+  ylab("Distance between incubated and initial")
+
+out$inoculumType=NA
+out$inoculumType[out$lakeID%in%c("CB", "NG", "MI")]="acidic inoculum"
+out$inoculumType[out$lakeID%in%c("WA", "TF", "PR")]="near-neutral inoculum"
+out$inoculumType[out$lakeID%in%c("RP")]="regional pool"
+
+summary(aov(distance~inoculumType*treatment, data=out[out$community=="MCC",]))
+summary(aov(distance~inoculumType*treatment, data=out[out$community=="non-MCC",]))
+
+
 centers=aggregate(nonaxis1~lakeID+treatment, data=df, FUN="mean")
 centers$nonaxis2=aggregate(nonaxis2~lakeID+treatment, data=df, FUN="mean")[,3]
 centers$Maxis1=aggregate(Maxis1~lakeID+treatment, data=df, FUN="mean")[,3]
@@ -127,6 +173,13 @@ dist(centers[centers$lakeID=="RP",5:6], method = "euclidean", diag = FALSE)
 homeDist=read.csv("distanceToHome.csv", stringsAsFactors = F)
 t.test(distanceInitialToHome~lakeType, data = homeDist[homeDist$community=="MCC",])
 t.test(distanceInitialToHome~lakeType, data = homeDist[homeDist$community=="non-MCC",])
+
+summary(aov(distanceInitialToHome~lakeType, data = homeDist[homeDist$community=="MCC",]))
+summary(aov(distanceInitialToHome~lakeID, data = homeDist[homeDist$community=="MCC",]))
+summary(aov(distanceInitialToHome~lakeType, data = homeDist[homeDist$community=="non-MCC",]))
+summary(aov(distanceInitialToHome~lakeID, data = homeDist[homeDist$community=="non-MCC",]))
+
+
 
 ggplot(homeDist, aes(x=lakeType, y=distanceInitialToHome))+geom_boxplot()+
   facet_grid(~community)+
@@ -380,7 +433,6 @@ F_to_eta2(f=fit2$aov.tab$F.Model[1], df=2,df_error = 50)
 #Interaction effect size = 0.11
 F_to_eta2(f=fit3$F[1], df=2,df_error = 50)
 
-
 #plot non-MCC principle coordinates
 otuE.p=ggplot(dfE, aes(x=nonaxis1, y=nonaxis2))+
   geom_point(aes(color=lakeType, shape=treatment))+
@@ -404,6 +456,7 @@ otuE.p
 pcoa$eig[1]/sum(pcoa$eig)
 pcoa$eig[2]/sum(pcoa$eig)
 
+
 # look at significance of treatments on non-methanogen community 
 fit=adonis(dist~df$treatment*df$lakeType)
 
@@ -417,6 +470,7 @@ F_to_eta2(f=fit1$aov.tab$F.Model[1], df=1, df_error = 50)
 F_to_eta2(f=fit2$aov.tab$F.Model[1], df=2,df_error = 50)
 #Interaction effect size = 0.13
 F_to_eta2(f=fit3$F[1], df=2,df_error = 50)
+
 
 
 ggsave("figures/exp-community.pdf", height=2.5, width=3.5)
@@ -614,25 +668,28 @@ rates$treatment.x=factor(rates$treatment.x,
                          levels=c("acidic", "neutral"),
                          labels=c("acidic", "near-neutral"))
 rates$lakeType=factor(rates$lakeType,
-                         levels=c("acidic", "neutral", "regional"),
+                         levels=c("acidic", "near-neutral", "regional"),
                          labels=c("A", "N", "R"))
 p4=ggplot(rates, aes(x=lakeType, y=CH4prod, fill=treatment.x))+
   geom_boxplot()+xlab("Inoculum Source")+
   ylab(expression(paste(CH["4"], " production ", sep="")))+
-  scale_fill_discrete(name="pH Environment")+
-  theme(axis.text.x = element_blank(),
-        axis.title.x = element_blank(),
+  scale_fill_manual(name="pH Environment", values=c("black", "grey60"))+
+  theme(#axis.text.x = element_blank(),
+        #axis.title.x = element_blank(),
         legend.key.width=unit(0.3,"cm"),
         legend.key.height=unit(0.3,"cm"), 
         legend.position = c(0.75, 0.8),
         legend.background = element_rect(fill="grey90"),
         legend.key = element_rect(colour = NA, fill = NA),
         legend.title=element_text(size=10), 
-        legend.text=element_text(size=9))
+        legend.text=element_text(size=9))+
+  NULL
+p4
+
 p5=ggplot(rates, aes(x=lakeType, y=CO2prod, fill=treatment.x))+
   geom_boxplot()+xlab("Inoculum Source")+
   ylab(expression(paste(CO["2"], " production ", sep="")))+
-  scale_fill_discrete(name="pH Environment")+
+  scale_fill_manual(name="pH Environment", values=c("black", "grey60"))+
   theme(legend.key.width=unit(0.3,"cm"),
         legend.key.height=unit(0.3,"cm"), 
         legend.justification = "top", 
@@ -640,7 +697,7 @@ p5=ggplot(rates, aes(x=lakeType, y=CO2prod, fill=treatment.x))+
         legend.text=element_text(size=9))
 p6=plot_grid(p4, p5+guides(fill=F),
              ncol=1)
-ggsave("figures/function.pdf",p6, height=4.5, width=3)
+ggsave("manuscript/ISMEsubmission/Figures/Figure4.pdf",p6, height=4.5, width=3)
 
 fit1=aov(CH4prod~treatment.x*lakeType, data=rates[rates$lakeID.x!="RP",])
 
